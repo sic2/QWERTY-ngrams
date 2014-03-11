@@ -1,4 +1,3 @@
-from nltk.corpus import gutenberg, brown
 from nltk import ngrams
 from math import log, exp, floor
 from random import random
@@ -16,19 +15,14 @@ import csv
 # http://stackoverflow.com/questions/10708852/how-to-calculate-probabilities-from-confusion-matrices-need-denominator-chars
 
 class ngramsModel:
-
 	keyboard = [['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
 					['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
 					['z', 'x', 'c', 'v', 'b', 'n', 'm']]
-	# Dictionary used to access letters in keyboard at constant time 
-	lettersDict = {}
 
-	# XXX - use Kernighan confusion matrix ???
-	p_r = p_l = 0.2 # ASSUMPTION
-	p_rr = p_ll = 0.25 # ASSUMPTION
 	START_WORD = '$'
 
 	def __init__(self):
+		self.lettersDict = dict()
 		for i, subList in enumerate(self.keyboard):
 			for j, val in enumerate(subList):
 				self.lettersDict[val] = (i, j)
@@ -38,7 +32,7 @@ class ngramsModel:
 		alphabeth = list(string.ascii_lowercase)
 		self.confusionMatrix = dict()
 		with open(filename, 'rb') as csvfile:
-			rows = csv.reader(csvfile, delimiter=',', quotechar='|')
+			rows = csv.reader(csvfile, delimiter='\t', quotechar='|')
 			for row in rows:
 				self.confusionMatrix[row[0]] = dict()
 				for i in xrange(len(row) - 1):
@@ -64,28 +58,24 @@ class ngramsModel:
 
 		return case
 
-	def generateSTDConfusionMatrix(self):
+	def generateSTDConfusionMatrix(self, p_l = 0.2, p_r = 0.2, p_ll = 0.25, p_rr = 0.25):
 		self.confusionMatrix = dict()
-		row = 0
-		for keyR in self.keyboard:
-			column = 0
-			for key in keyR:
+		for row, keyR in enumerate(self.keyboard):
+			for column, key in enumerate(keyR):
 				self.confusionMatrix[key] = dict()
 				case = self.adjKeysCase(key)
-				accProb = 0.0
+				accProb = 1.0
 				if (case == 0):
-					self.confusionMatrix[key][self.keyboard[row][column - 1]] = self.p_l
-					self.confusionMatrix[key][self.keyboard[row][column + 1]] = self.p_r
-					accProb += self.p_l + self.p_r
+					self.confusionMatrix[key][self.keyboard[row][column - 1]] = p_l
+					self.confusionMatrix[key][self.keyboard[row][column + 1]] = p_r
+					accProb -= p_l + p_r
 				elif (case == 1):
-					self.confusionMatrix[key][self.keyboard[row][column + 1]] = self.p_rr
-					accProb += self.p_rr
+					self.confusionMatrix[key][self.keyboard[row][column + 1]] = p_rr
+					accProb -= p_rr
 				else:
-					self.confusionMatrix[key][self.keyboard[row][column - 1]] = self.p_ll
-					accProb += self.p_ll
-				self.confusionMatrix[key][key] = 1 - accProb
-				column += 1
-			row += 1
+					self.confusionMatrix[key][self.keyboard[row][column - 1]] = p_ll
+					accProb -= p_ll
+				self.confusionMatrix[key][key] = accProb
 
 	''' exp(returned Probability) to get probability '''
 	def createNgramModel(self, N, trainingSet):
@@ -117,8 +107,8 @@ class ngramsModel:
 	'''
 	def potentialCorrections(self, str, index):
 		retval = []
-		currentLastKey = list(str)[index] # TODO - rename currentLastKey
-		possibleKeys = self.confusionMatrix[currentLastKey]
+		keyToChange = list(str)[index]
+		possibleKeys = self.confusionMatrix[keyToChange]
 		for key, prob in possibleKeys.iteritems():
 			retval.append(((-log(prob)), self.substitute(str, key, index)))
 
@@ -161,11 +151,8 @@ class ngramsModel:
 		return retval, probability
 
 	def getCorrection(self, str, index):
-		print 'get correction ', index
 		retval = self.START_WORD + str.lower()		
 		probabilityCurrentStr = sys.maxint
-
-		# Check potential corrections
 		potentialCorrs = self.potentialCorrections(retval, index)
 		for potentialCorr in potentialCorrs:
 			prob = self.calculateProbability(potentialCorr[1], self.N) \
@@ -178,36 +165,27 @@ class ngramsModel:
 
 	'''
 	Change last letter given probability rand
-	and based on how likely one makes a mistake (p_r, p_l, p_rr, p_ll)
+	and based on how likely one makes a mistake for that particularly key
+	(confusion matrix)
 	'''
 	def getModifiedWord(self, word, rand):
 		# Randomly change the input
-		index = (int) (floor(random() * len(word)))
-		key = list(word)[index]
-		keyPosition = self.lettersDict[key]
-		case = self.adjKeysCase(key)
-		if (case == 0):
-			if (rand < self.p_l):
-				word = self.substitute(word, \
-					self.keyboard[keyPosition[0]][keyPosition[1] - 1], index)
-			elif (rand < 2 * self.p_r):
-				word = self.substitute(word, \
-					self.keyboard[keyPosition[0]][keyPosition[1] + 1], index)
-		elif (case == 1):
-			if (rand < self.p_ll):
-				word = self.substitute(word, \
-					self.keyboard[keyPosition[0]][keyPosition[1] + 1], index)
-		else:
-			if (rand < self.p_rr):
-				word = self.substitute(word, \
-					self.keyboard[keyPosition[0]][keyPosition[1] - 1], index)
+		indexCharToModify = (int) (floor(random() * len(word)))
+		key = list(word)[indexCharToModify]
+		possibleKeys = self.confusionMatrix[key]
+		accProb = 0.0
+		for key, prob in possibleKeys.iteritems():
+			accProb += prob
+			if rand < accProb:
+				word = self.substitute(word, key, indexCharToModify)
+				break
 
 		return word
 
 	def testModel(self, validationSet):
 		print "Start validation process"
-		validCorrections = 0
-		totalWords = 0
+		validCorrections = totalWords = 0
+		tick = time.time()
 		for word in validationSet:
 			word = word.lower()
 			if word.isalpha():
@@ -216,7 +194,7 @@ class ngramsModel:
 				if (self.proposeCorrection(word)[0] == correctWord):
 					validCorrections += 1
 				totalWords += 1
-
+		print "Finished validation process in ", (time.time() - tick), " seconds"
 		return validCorrections / (totalWords * 1.0)
 
 	# This function was taken from the following website:
@@ -237,23 +215,22 @@ class ngramsModel:
 			validation = [x for i, x in enumerate(X) if i % K == k]
 			yield training, validation
 
-	def performCV(self, N, k=2):
+	def performCV(self, corpus, N, k=2):
 		if (k < 2):
 			k = 2 # minimum value of k
 
-		brownSet = brown.words()[0:10000]
 		measurements = dict()
 		for n in xrange(N):
 			print "Start measurements for n: ", (n + 1)
 			i = 1
 			error = 0.0
-			for training, validation in self.k_fold_cross_validation(brownSet, K=k):
+			for training, validation in self.k_fold_cross_validation(corpus, K=k):
 				print i, "-fold CV"
 				t = time.time()
 				self.createNgramModel(n + 1, training)
 				error += self.testModel(validation)
 				i += 1
-				print "time taken ", (time.time() - t)
+				print "Time taken ", (time.time() - t)
 			error /= k
 			measurements[n + 1] = error
 
