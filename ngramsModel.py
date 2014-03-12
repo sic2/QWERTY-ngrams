@@ -8,12 +8,6 @@ import matplotlib.pyplot as plt
 import time
 import csv
 
-# Kernighan substitution table available at:
-# http://comp.mq.edu.au/units/comp348/assignment3.html
-# Reuter RCV1 corpus is very big
-# so use Reuter 21578
-# http://stackoverflow.com/questions/10708852/how-to-calculate-probabilities-from-confusion-matrices-need-denominator-chars
-
 class ngramsModel:
 	keyboard = [['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
 					['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'],
@@ -134,14 +128,16 @@ class ngramsModel:
 	def getProbability(self, logProb):
 		return exp(-logProb)
 
-	def proposeCorrection(self, str, printOutput=False):
+	def proposeCorrection(self, str, lastKeyOnly = False, printOutput=False):
 		probability = 0
 		retval = str
-		for i in xrange(len(str)):
-			tmp = self.getCorrection(str, (i + 1))
-			if (tmp[1] > probability):
-				probability = tmp[1]
-				retval = tmp[0]
+		if not lastKeyOnly:
+			for i in xrange(len(str)):
+				tmp = self.getCorrection(str, (i + 1))
+				if (tmp[1] > probability):
+					retval, probability = tmp
+		else:
+			retval, probability = self.getCorrection(str, len(str))
 
 		if printOutput and retval == str.lower():
 			print 'No correction needed'
@@ -168,9 +164,10 @@ class ngramsModel:
 	and based on how likely one makes a mistake for that particularly key
 	(confusion matrix)
 	'''
-	def getModifiedWord(self, word, rand):
+	def getModifiedWord(self, word, rand, lastKeyOnly = False):
 		# Randomly change the input
-		indexCharToModify = (int) (floor(random() * len(word)))
+		indexCharToModify = (int) (floor(random() * len(word))) \
+							if not lastKeyOnly else (len(word) - 1)  
 		key = list(word)[indexCharToModify]
 		possibleKeys = self.confusionMatrix[key]
 		accProb = 0.0
@@ -182,7 +179,7 @@ class ngramsModel:
 
 		return word
 
-	def testModel(self, validationSet):
+	def testModel(self, validationSet, lastKeyOnly = False):
 		print "Start validation process"
 		validCorrections = totalWords = 0
 		tick = time.time()
@@ -190,8 +187,8 @@ class ngramsModel:
 			word = word.lower()
 			if word.isalpha():
 				correctWord = word
-				word = self.getModifiedWord(word, random())
-				if (self.proposeCorrection(word)[0] == correctWord):
+				word = self.getModifiedWord(word, random(), lastKeyOnly)
+				if (self.proposeCorrection(word, lastKeyOnly)[0] == correctWord):
 					validCorrections += 1
 				totalWords += 1
 		print "Finished validation process in ", (time.time() - tick), " seconds"
@@ -215,7 +212,7 @@ class ngramsModel:
 			validation = [x for i, x in enumerate(X) if i % K == k]
 			yield training, validation
 
-	def performCV(self, corpus, N, k=2):
+	def performCV(self, corpus, N, k=2, lastKeyOnly = False):
 		if (k < 2):
 			k = 2 # minimum value of k
 
@@ -228,7 +225,7 @@ class ngramsModel:
 				print i, "-fold CV"
 				t = time.time()
 				self.createNgramModel(n + 1, training)
-				error += self.testModel(validation)
+				error += self.testModel(validation, lastKeyOnly)
 				i += 1
 				print "Time taken ", (time.time() - t)
 			error /= k
