@@ -18,13 +18,13 @@ def test2():
 	model = ngramsModel()
 	model.generateSTDConfusionMatrix()
 	model.createNgramModel(3, brown.words())
-	print model.proposeCorrection("hdllp", lastKeyOnly = False, printOutput=True)
+	print model.proposeCorrection("normsl", lastKeyOnly = False, printOutput=True)
 
 def test3():
 	model = ngramsModel()
 	model.readConfusionMatrix('customKeyboard.csv')
 	model.createNgramModel(3, brown.words())
-	print model.proposeCorrection("hdllp", lastKeyOnly = False, printOutput=True)
+	print model.proposeCorrection("normwl", lastKeyOnly = False, printOutput=True)
 
 # The tests below can take a considerably amount of time (> 1hr)
 # Using brown.words()[:10000] will reduce the total running time, 
