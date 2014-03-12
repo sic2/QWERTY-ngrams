@@ -21,7 +21,11 @@ class ngramsModel:
 			for j, val in enumerate(subList):
 				self.lettersDict[val] = (i, j)
 
-
+	'''
+	Read a confusion matrix from file.
+	Format file:
+	correct key <TAB> (Letter_TypedProbability <TAB>)*
+	'''
 	def readConfusionMatrix(self, filename):
 		alphabeth = list(string.ascii_lowercase)
 		self.confusionMatrix = dict()
@@ -52,6 +56,9 @@ class ngramsModel:
 
 		return case
 
+	'''
+	Generates a STD confusion matrix (left-right keys only)
+	'''
 	def generateSTDConfusionMatrix(self, p_l = 0.2, p_r = 0.2, p_ll = 0.25, p_rr = 0.25):
 		self.confusionMatrix = dict()
 		for row, keyR in enumerate(self.keyboard):
@@ -96,8 +103,9 @@ class ngramsModel:
 		return ''.join(tmp)
 
 	''' 
-	index starts from 1 to len(str) since START_WORD character is added to each word
-	returns at most two potential corrections
+	Return a list of potential corrections for a given string, 
+	substituting the letter at given index [1, len(string)].
+	Letters are substituted using the confusion matrix.
 	'''
 	def potentialCorrections(self, str, index):
 		retval = []
@@ -105,12 +113,14 @@ class ngramsModel:
 		possibleKeys = self.confusionMatrix[keyToChange]
 		for key, prob in possibleKeys.iteritems():
 			retval.append(((-log(prob)), self.substitute(str, key, index)))
-
 		return retval
 
 	def laplaceSmoothing(self, predictionCount, currentSentenceCount):
 		return (- log((predictionCount + 1) / ((currentSentenceCount + len(self.lettersDict)) * 1.0)))
 
+	'''
+	Return N-gram probability for a string
+	'''
 	def ngramProbability(self, str, N, smoothingFunction=laplaceSmoothing):
 		predictionCount = self.ngramModel[str[-N:]] \
 							if str[-N:] in self.ngramModel else 0
@@ -118,6 +128,10 @@ class ngramsModel:
 							if str[-N:-1] in self.ngramModel else 0 
 		return smoothingFunction(self, predictionCount, currentSentence)
 
+	'''
+	Apply chaining rule, and stop when N = 2 
+	(unigrams not needed, since using START_WORD symbol)
+	'''
 	def calculateProbability(self, str, N):
 		if (len(str) == 2):
 			return self.ngramProbability(str, 2)
@@ -128,6 +142,27 @@ class ngramsModel:
 	def getProbability(self, logProb):
 		return exp(-logProb)
 
+	'''
+	Returns the most likely correction for a given word
+	and given the index of the letter that could have been mistyped
+	'''
+	def getCorrection(self, str, index):
+		retval = self.START_WORD + str.lower()		
+		probabilityCurrentStr = sys.maxint
+		potentialCorrs = self.potentialCorrections(retval, index)
+		for potentialCorr in potentialCorrs:
+			prob = self.calculateProbability(potentialCorr[1], self.N) \
+										+ potentialCorr[0]
+			if prob < probabilityCurrentStr:
+				retval = potentialCorr[1]
+				probabilityCurrentStr = prob
+		return retval[1:], self.getProbability(probabilityCurrentStr)
+
+	'''
+	Returns a correction if one is found. 
+	Setting lastKeyOnly to True or False allows to specify whether
+	any letter in a word should be corrected or only the last one.
+	'''
 	def proposeCorrection(self, str, lastKeyOnly = False, printOutput=False):
 		probability = 0
 		retval = str
@@ -146,19 +181,6 @@ class ngramsModel:
 
 		return retval, probability
 
-	def getCorrection(self, str, index):
-		retval = self.START_WORD + str.lower()		
-		probabilityCurrentStr = sys.maxint
-		potentialCorrs = self.potentialCorrections(retval, index)
-		for potentialCorr in potentialCorrs:
-			prob = self.calculateProbability(potentialCorr[1], self.N) \
-										+ potentialCorr[0]
-			if prob < probabilityCurrentStr:
-				retval = potentialCorr[1]
-				probabilityCurrentStr = prob
-
-		return retval[1:], self.getProbability(probabilityCurrentStr)
-
 	'''
 	Change last letter given probability rand
 	and based on how likely one makes a mistake for that particularly key
@@ -176,7 +198,6 @@ class ngramsModel:
 			if rand < accProb:
 				word = self.substitute(word, key, indexCharToModify)
 				break
-
 		return word
 
 	def testModel(self, validationSet, lastKeyOnly = False):
@@ -194,8 +215,7 @@ class ngramsModel:
 		print "Finished validation process in ", (time.time() - tick), " seconds"
 		return validCorrections / (totalWords * 1.0)
 
-	# This function was taken from the following website:
-	# http://code.activestate.com/recipes/521906-k-fold-cross-validation-partition/
+	# This function was taken from the following website: http://code.activestate.com/recipes/521906-k-fold-cross-validation-partition/
 	def k_fold_cross_validation(self, X, K, randomise = False):
 		"""
 		Generates K (training, validation) pairs from the items in X.
@@ -234,5 +254,3 @@ class ngramsModel:
 		# plt.plot(range(len(measurements)), measurements.values(), 'ro')
 		# plt.xticks(range(len(measurements)), measurements.keys())
 		# plt.show()
-
-
