@@ -4,7 +4,7 @@ from random import random
 
 import sys
 import string
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import time
 import csv
 
@@ -212,7 +212,7 @@ class ngramsModel:
 			validation = [x for i, x in enumerate(X) if i % K == k]
 			yield training, validation
 
-	def performCV(self, corpus, N, k=2, lastKeyOnly = False):
+	def performCV(self, corpus, N, k=10, lastKeyOnly = False):
 		if (k < 2):
 			k = 2 # minimum value of k
 
@@ -230,9 +230,9 @@ class ngramsModel:
 				print "Time taken ", (time.time() - t)
 			error /= k
 			measurements[n + 1] = error
-
-		plt.plot(range(len(measurements)), measurements.values(), 'ro')
-		plt.xticks(range(len(measurements)), measurements.keys())
-		plt.show()
+		print measurements
+		# plt.plot(range(len(measurements)), measurements.values(), 'ro')
+		# plt.xticks(range(len(measurements)), measurements.keys())
+		# plt.show()
 
 
