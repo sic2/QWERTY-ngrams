@@ -34,3 +34,8 @@ Additional tests can also be easily written, as long as the following steps are 
 3.2 Or CV is performed
 	
 	model.performCV(corpus, N, k = (>2), lastKeyOnly = True/False)
+
+# TODO
+- Correct multiple errors
+- Support more advanced smoothing, backoff, etc
+- Evaluate different confusion matrices
